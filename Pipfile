@@ -1,0 +1,25 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+"flake8" = "*"
+pandas = "*"
+matplotlib = "*"
+sklearn = "*"
+numpy = "==1.15"
+jupyterlab = "*"
+gpy = "*"
+scipy = "*"
+seaborn = "*"
+sympy = "*"
+pillow = "*"
+
+[dev-packages]
+"flake8" = "*"
+pylint = "*"
+yapf = "*"
+
+[requires]
+python_version = "3.6"
