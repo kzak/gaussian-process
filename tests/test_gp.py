@@ -6,6 +6,7 @@ import pytest
 from gp import * # noqa
 
 import numpy as np
+np.random.seed(42)
 
 
 ##############################
@@ -33,7 +34,7 @@ def params():
 
 @pytest.fixture
 def params_ranges():
-    return np.array([[1e-2, 1], [1e-2, 1], [1e-2, 1]])
+    return np.array([[1, 10], [1, 10], [1, 10]])
 
 
 @pytest.fixture
@@ -76,11 +77,29 @@ def test_GP_loglik(gp):
     assert isinstance(ll, float)
 
 
-def test_GP_optimize_mcmc(gp):
+def test_GP_loglik_grads(gp, params):
+    grads = gp.loglik_grads(params)
+
+    assert (3, ) == grads.shape
+
+
+# def test_GP_optimize_grads(gp, params):
+#     params_prev = gp.params
+
+#     gp.optimize_grads(n_iter=100)
+
+#     params_next = gp.params
+
+#     assert all(params_next != params_prev)
+
+
+def test_GP_optimize_mcmc(gp, params):
     params_prev = gp.params
 
-    gp.optimize_mcmc(n_iter=10)
+    gp.optimize_mcmc(n_iter=100)
 
     params_next = gp.params
 
     assert all(params_next != params_prev)
+
+    

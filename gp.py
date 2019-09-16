@@ -4,7 +4,8 @@ import numpy as np
 
 
 def kernel_func(xi, xj, params):
-    e_tau, e_sigma, e_eta = params
+    tau, sigma, eta = params
+    e_tau, e_sigma, e_eta = np.exp(params)
 
     # dist_ij = |xi - xj|^2
     dist_ij = (xi - xj) ** 2
@@ -23,14 +24,12 @@ class GP:
         self.Y = Y
         self.X = X
         self.kernel_func = kernel_func
-        self.params = [np.exp(p) for p in params]
+        self.params = params
         self.params_ranges = params_ranges
 
     # train the model (without hyper parameter optimization)
     def train(self):
-        self.K00 = self.kernel_func(
-            *np.meshgrid(self.X, self.X), self.params)
-
+        self.K00 = self.kernel_func(*np.meshgrid(self.X, self.X), self.params)
         self.K00_inv = np.linalg.inv(self.K00)
 
     # predict y (=mu, std) from x
@@ -72,6 +71,7 @@ class GP:
             params_next = params_prev + lr * deltas
             ll_next = self.loglik(params_next)
 
+#            print(i, ll_next, params_next)
             r = np.exp(ll_next - ll_prev)
             if(r >= 1 or r > np.random.random()):
                 params_list.append(params_next)
@@ -81,9 +81,59 @@ class GP:
                 ll_prev = ll_next
                 
         # Update kernal parameters
-        self.params = np.exp(params_list[np.argmax(ll_list)])
+        # import pdb; pdb.set_trace()
+        self.params = params_list[np.argmax(ll_list)]
         
         # and retrain the model.
         self.K00 = kernel_func(*np.meshgrid(self.X, self.X), self.params)
         self.K00_inv = np.linalg.inv(self.K00)
-    
+
+    def loglik_grads(self, params):
+        tau, sigma, eta = params
+        e_tau, e_sigma, e_eta = np.exp(params)
+
+        X = self.X.reshape(len(self.X), 1)
+        Y = self.Y
+
+        K = self.K00
+        K_inv = np.linalg.inv(K)
+        K_inv_Y = np.dot(K_inv, Y)
+        D = np.eye(len(K))
+
+        X = self.X.reshape(len(K), 1)
+        dist_X = np.linalg.norm(X[:, np.newaxis] - X, axis=-1)
+
+        K_tau = self.K00 - e_eta * D
+        K_sigma = np.dot((self.K00 - e_eta * D), (np.exp(-sigma)) * dist_X)
+        K_eta = e_eta * D
+
+#        import pdb; pdb.set_trace()
+
+        grad_tau = - np.trace(np.dot(K_inv, K_tau)) + \
+            np.dot(K_inv_Y.T, K_tau).dot(K_inv_Y)
+
+        grad_sigma = - np.trace(np.dot(K_inv, K_sigma)) + \
+            np.dot(K_inv_Y.T, K_sigma).dot(K_inv_Y)
+
+        grad_eta = - np.trace(np.dot(K_inv, K_eta)) + \
+            np.dot(K_inv_Y.T, K_eta).dot(K_inv_Y)
+
+        return np.array([grad_tau, grad_sigma, grad_eta])
+
+    def optimize_grads(self, n_iter=1000, lr=0.1):
+        params = self.params.copy()
+        tau, sigma, eta = params
+
+        for i in range(n_iter):
+            
+            delta_tau, delta_sigma, delta_eta = self.loglik_grads(params)
+
+            tau = tau + lr * delta_tau
+            sigma = sigma + lr * delta_sigma
+            eta = eta + lr * delta_eta
+
+            params = np.array([tau, sigma, eta])
+            self.params = params
+            self.train()
+
+        self.params = params
