@@ -34,12 +34,17 @@ def params():
 
 @pytest.fixture
 def params_ranges():
-    return np.array([[1, 10], [1, 10], [1, 10]])
+    return np.array([[1, 5], [1, 5], [1, 5]])
 
 
 @pytest.fixture
-def gp(Y, X, params, params_ranges):
-    gp = GP(Y, X, kernel_func, params, params_ranges)
+def kernel(params, params_ranges):
+    return Kernel(params, params_ranges)
+
+
+@pytest.fixture
+def gp(Y, X, kernel):
+    gp = GP(Y, X, kernel)
     gp.train()
     return gp
 
@@ -50,6 +55,17 @@ def gp(Y, X, params, params_ranges):
 
 def test_kernel_func(X, params):
     kernel_func(*np.meshgrid(X, X), params)
+
+
+def test_Kernel_init(kernel):
+    assert isinstance(kernel, Kernel)
+
+
+def test_Kernel_kernel_matrix(kernel, X):
+    K = kernel(X)
+
+    nrow_X = len(X)
+    assert (nrow_X, nrow_X) == K.shape
 
 
 def test_GP_init(gp):
@@ -77,29 +93,31 @@ def test_GP_loglik(gp):
     assert isinstance(ll, float)
 
 
-def test_GP_loglik_grads(gp, params):
-    grads = gp.loglik_grads(params)
-
-    assert (3, ) == grads.shape
-
-
-# def test_GP_optimize_grads(gp, params):
-#     params_prev = gp.params
-
-#     gp.optimize_grads(n_iter=100)
-
-#     params_next = gp.params
-
-#     assert all(params_next != params_prev)
-
-
 def test_GP_optimize_mcmc(gp, params):
-    params_prev = gp.params
+    params_prev = gp.kernel.params
 
-    gp.optimize_mcmc(n_iter=100)
+    gp.optimize_mcmc(n_iter=10)
 
-    params_next = gp.params
+    params_next = gp.kernel.params
 
     assert all(params_next != params_prev)
+
+    
+# def test_GP_loglik_grads(gp, params):
+#     grads = gp.loglik_grads(params)
+
+#     assert (3, ) == grads.shape
+
+
+# # def test_GP_optimize_grads(gp, params):
+# #     params_prev = gp.params
+
+# #     gp.optimize_grads(n_iter=100)
+
+# #     params_next = gp.params
+
+# #     assert all(params_next != params_prev)
+
+
 
     
