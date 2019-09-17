@@ -29,7 +29,7 @@ def Y(X, N):
 
 @pytest.fixture
 def params():
-    return [1.0, 1.0, 1.0]
+    return [3.0, 3.0, 3.0]
 
 
 @pytest.fixture
@@ -52,10 +52,6 @@ def gp(Y, X, kernel):
 ##############################
 # Tests
 ##############################
-
-def test_kernel_func(X, params):
-    kernel_func(*np.meshgrid(X, X), params)
-
 
 def test_Kernel_init(kernel):
     assert isinstance(kernel, Kernel)
@@ -102,21 +98,21 @@ def test_GP_optimize_mcmc(gp, params):
 
     assert all(params_next != params_prev)
 
-    
+
 # def test_GP_loglik_grads(gp, params):
 #     grads = gp.loglik_grads(params)
 
 #     assert (3, ) == grads.shape
 
 
-# # def test_GP_optimize_grads(gp, params):
-# #     params_prev = gp.params
+# def test_GP_optimize_grads(gp, params):
+#     params_prev = gp.kernel.params
 
-# #     gp.optimize_grads(n_iter=100)
+#     gp.optimize_grads(n_iter=100)
 
-# #     params_next = gp.params
+#     params_next = gp.kernel.params
 
-# #     assert all(params_next != params_prev)
+#     assert all(params_next != params_prev)
 
 
 

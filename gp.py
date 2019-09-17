@@ -3,22 +3,6 @@
 import numpy as np
 
 
-def kernel_func(xi, xj, params):
-    tau, sigma, eta = params
-    e_tau, e_sigma, e_eta = np.exp(params)
-
-    # dist_ij = |xi - xj|^2
-    dist_ij = (xi - xj) ** 2
-
-    # delta(xi, xj)
-    delta_ij = (xi == xj)
-
-    # k(xi, xj | theta), theta = {tau, sigma, eta}
-    k_ij = e_tau * np.exp(- (dist_ij / e_sigma)) + e_eta * delta_ij
-
-    return k_ij
-
-
 class Kernel:
     def __init__(self, params, params_ranges):
         self.params = params
@@ -36,11 +20,9 @@ class Kernel:
 
         # theta_1, theta_2, theta_3 > 0
         # theta_1 = e^tau, theta_2 = e^sig, theta_3 = e^eta
-        # theta_1, theta_2, theta_3 = params
-        tau, sig, eta = np.log(params)
-        e_tau, e_sig, e_eta = np.exp([tau, sig, eta])
+        e_tau, e_sig, e_eta = params
 
-        return e_tau * np.exp(- (xi - xj) ** 2 / e_sig) + e_eta * (xi == xj)
+        return e_tau * np.exp((-(xi - xj)**2) / e_sig) + e_eta * (xi == xj)
 
     def __call__(self, X, params=None):
         return self.kernel_matrix(X, params)
@@ -80,7 +62,7 @@ class GP:
         
         return -(np.linalg.slogdet(K00)[1] + self.Y.dot(K00_inv.dot(self.Y)))
 
-    def optimize_mcmc(self, n_iter=1000, lr=0.1):
+    def optimize_mcmc(self, n_iter=1000, lr=1.0):
         n_params = len(self.kernel.params)
         s = (self.kernel.params_ranges[:, 1] - self.kernel.params_ranges[:, 0])
 
@@ -92,6 +74,15 @@ class GP:
         
         for i in range(n_iter):
             deltas = np.random.normal(0, s, n_params)
+
+            # oor(Out Of Range) : ex) [False, False, True]
+            oor = self.out_of_range(
+                params_prev + deltas, self.kernel.params_ranges)
+
+            while(np.any(oor)):
+                deltas[oor] = np.random.normal(0, s, n_params)[oor]
+                oor = self.out_of_range(
+                    params_prev + deltas, self.kernel.params_ranges)
 
             params_next = params_prev + lr * deltas
             ll_next = self.loglik(params_next)
@@ -111,8 +102,8 @@ class GP:
         self.train()
 
     def loglik_grads(self, params):
-        tau, sigma, eta = params
-        e_tau, e_sigma, e_eta = np.exp(params)
+        tau, sig, eta = np.log(params)
+        e_tau, e_sig, e_eta = params
 
         X = self.X.reshape(len(self.X), 1)
         Y = self.Y
@@ -126,7 +117,7 @@ class GP:
         dist_X = np.linalg.norm(X[:, np.newaxis] - X, axis=-1)
 
         K_tau = self.K00 - e_eta * D
-        K_sigma = np.dot((self.K00 - e_eta * D), (np.exp(-sigma)) * dist_X)
+        K_sig = np.dot((self.K00 - e_eta * D), (np.exp(-sig)) * dist_X)
         K_eta = e_eta * D
 
 #        import pdb; pdb.set_trace()
@@ -134,8 +125,8 @@ class GP:
         grad_tau = - np.trace(np.dot(K_inv, K_tau)) + \
             np.dot(K_inv_Y.T, K_tau).dot(K_inv_Y)
 
-        grad_sigma = - np.trace(np.dot(K_inv, K_sigma)) + \
-            np.dot(K_inv_Y.T, K_sigma).dot(K_inv_Y)
+        grad_sigma = - np.trace(np.dot(K_inv, K_sig)) + \
+            np.dot(K_inv_Y.T, K_sig).dot(K_inv_Y)
 
         grad_eta = - np.trace(np.dot(K_inv, K_eta)) + \
             np.dot(K_inv_Y.T, K_eta).dot(K_inv_Y)
@@ -143,19 +134,22 @@ class GP:
         return np.array([grad_tau, grad_sigma, grad_eta])
 
     def optimize_grads(self, n_iter=1000, lr=0.1):
-        params = self.params.copy()
-        tau, sigma, eta = params
+        params = self.kernel.params.copy()
+        e_tau, e_sig, e_eta = params
+        tau, sig, eta = np.log(params)
 
         for i in range(n_iter):
             
             delta_tau, delta_sigma, delta_eta = self.loglik_grads(params)
 
             tau = tau + lr * delta_tau
-            sigma = sigma + lr * delta_sigma
+            sigma = sig + lr * delta_sigma
             eta = eta + lr * delta_eta
 
-            params = np.array([tau, sigma, eta])
-            self.params = params
+            params = np.exp(np.array([tau, sigma, eta]))
+
+            self.kernel.params = params
             self.train()
 
-        self.params = params
+    def out_of_range(self, params, params_ranges):
+        return (params < params_ranges[:, 0]) | (params > params_ranges[:, 1])
